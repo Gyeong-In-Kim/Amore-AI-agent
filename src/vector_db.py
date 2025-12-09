@@ -1,106 +1,64 @@
 import os
-import shutil
-import time
-from dotenv import load_dotenv
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import Chroma
-from langchain_core.documents import Document
+import json
+import chromadb
+from chromadb.utils import embedding_functions
 
-# 👇👇👇 여기를 수정했어! (만능 임포트 구문) 👇👇👇
-try:
-    # main.py에서 실행할 때 (거실에서 부를 때)
-    from src.data_loader import load_product_data
-except ImportError:
-    # vector_db.py를 직접 실행할 때 (방 안에서 부를 때)
-    from data_loader import load_product_data
-# 👆👆👆 여기까지 수정 👆👆👆
+# 1. 경로 설정
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# src의 상위 폴더(프로젝트 루트)를 찾음
+project_root = os.path.dirname(current_dir) 
+db_path = os.path.join(project_root, 'chroma_db')
+data_path = os.path.join(project_root, 'data', 'products.json')
 
+# 2. ChromaDB 클라이언트 설정 (Global 변수로 설정해서 어디서든 쓰게 함)
+client = chromadb.PersistentClient(path=db_path)
+sentence_transformer_ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
 
-# ... (나머지 코드는 그대로 두면 돼) ...
-load_dotenv()
+collection = client.get_or_create_collection(
+    name="cosmetics",
+    embedding_function=sentence_transformer_ef
+)
 
-CHROMA_PATH = "chroma_db"
+def init_db():
+    """JSON 파일을 읽어서 DB에 저장하는 함수"""
+    # 이미 데이터가 있으면 패스
+    if collection.count() > 0:
+        return
 
-class ProductVectorDB:
-    def __init__(self):
-        print("📥 임베딩 모델 로딩 중... (내 컴퓨터 CPU 사용)")
-        self.embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        self.db = None # 처음엔 연결 안 함 (파일 잠금 방지)
+    # JSON 파일 읽기
+    try:
+        with open(data_path, 'r', encoding='utf-8') as f:
+            products = json.load(f)
+    except FileNotFoundError:
+        print(f"❌ 파일을 못 찾겠어! 경로 확인: {data_path}")
+        return
 
-    def create_vector_db(self):
-        """
-        기존 DB를 삭제하고 새로 만듭니다.
-        """
-        # 1. 기존 DB가 있다면 강제 삭제
-        if os.path.exists(CHROMA_PATH):
-            # 혹시 연결되어 있다면 끊기
-            self.db = None 
-            print("🧹 기존 DB 삭제 시도...")
-            
-            # 윈도우 파일 잠금 풀릴 때까지 잠시 대기 후 삭제
-            try:
-                shutil.rmtree(CHROMA_PATH)
-                print(f"✨ 삭제 완료: {CHROMA_PATH}")
-            except PermissionError:
-                print("⚠️ 파일이 잠겨있어서 강제 삭제를 시도합니다...")
-                time.sleep(1) # 1초 숨 고르기
-                try:
-                    shutil.rmtree(CHROMA_PATH) # 재시도
-                except Exception as e:
-                    print(f"❌ 삭제 실패 (그냥 덮어쓰기 진행): {e}")
+    # DB에 넣을 데이터 준비
+    ids = []
+    documents = []
+    metadatas = []
 
-        # 2. 데이터 로드
-        raw_data = load_product_data()
-        if not raw_data:
-            print("❌ 데이터가 없습니다.")
-            return
+    for idx, item in enumerate(products):
+        ids.append(str(idx))
+        text = f"제품명: {item['name']}, 추천 피부: {item['skin_type']}, 해결 고민: {item['concern']}"
+        documents.append(text)
+        metadatas.append(item)
 
-        documents = []
-        for item in raw_data:
-            doc = Document(
-                page_content=item["search_text"],
-                metadata=item["metadata"]
-            )
-            documents.append(doc)
+    # 데이터 삽입
+    collection.add(ids=ids, documents=documents, metadatas=metadatas)
+    print(f"🎉 데이터 {len(ids)}개 DB 적재 완료!")
 
-        # 3. 벡터 DB 생성 및 저장 (이제 연결!)
-        print("🔮 데이터를 벡터로 변환 및 저장 중...")
-        self.db = Chroma.from_documents(
-            documents=documents,
-            embedding=self.embedding_model,
-            persist_directory=CHROMA_PATH
-        )
-        print(f"✅ 벡터 DB 구축 완료! 총 {len(documents)}개 데이터 저장됨.")
-
-    def load_db(self):
-        """
-        이미 만들어진 DB를 불러올 때 씀
-        """
-        if self.db is None:
-            self.db = Chroma(
-                persist_directory=CHROMA_PATH,
-                embedding_function=self.embedding_model
-            )
-
-    def search(self, query, k=3):
-        # DB가 로드 안 되어 있으면 로드
-        self.load_db()
+def search_best_product(query):
+    """
+    사용자 질문(query) 하나만 받아서 가장 적절한 제품을 찾는 함수
+    """
+    results = collection.query(
+        query_texts=[query],
+        n_results=1
+    )
+    
+    if not results['documents'][0]:
+        return None
         
-        print(f"\n🔎 검색 쿼리: '{query}'")
-        results = self.db.similarity_search_with_score(query, k=k)
-        return results
-
-if __name__ == "__main__":
-    vector_db = ProductVectorDB()
-    
-    # 1. 생성 (기존 거 지우고 새로 만듦)
-    vector_db.create_vector_db()
-    
-    # 2. 검색 테스트
-    test_query = "피부가 너무 건조하고 당겨서 고민이야. 엄마 선물로 좋을만한 거?"
-    results = vector_db.search(test_query)
-    
-    print(f"\n🏆 검색 결과 Top 3:")
-    for doc, score in results:
-        print(f"--- [유사도 거리: {score:.4f}] ---")
-        print(doc.page_content[:100] + "...")
+    best_match = results['metadatas'][0][0]
+    return best_match

@@ -1,0 +1,17 @@
+{
+  "user_id": "u_1024",
+  "basic_info": {
+    "age": 32,
+    "gender": "female",
+    "nickname": "지민"
+  },
+  "skin_profile": {
+    "type": "수부지 (수분 부족형 지성)",
+    "concerns": ["속당김", "좁쌀여드름", "오후에 화장 무너짐"], // ★ 핵심 매칭 포인트
+    "sensitivity": "높음 (알콜 성분 따가움)"
+  },
+  "preference": {
+    "texture": "산뜻한 젤 타입 선호",
+    "price_range": "3~5만원대"
+  }
+}
