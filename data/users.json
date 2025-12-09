@@ -1,17 +1,26 @@
-{
-  "user_id": "u_1024",
-  "basic_info": {
-    "age": 32,
-    "gender": "female",
-    "nickname": "지민"
+[
+  {
+    "id": "u1",
+    "name": "김민지",
+    "age": 20,
+    "skin_type": "지성",
+    "concern": "오후만 되면 화장이 무너지고 기름짐",
+    "platform": "kakao"
   },
-  "skin_profile": {
-    "type": "수부지 (수분 부족형 지성)",
-    "concerns": ["속당김", "좁쌀여드름", "오후에 화장 무너짐"], // ★ 핵심 매칭 포인트
-    "sensitivity": "높음 (알콜 성분 따가움)"
+  {
+    "id": "u2",
+    "name": "이영희",
+    "age": 45,
+    "skin_type": "건성",
+    "concern": "눈가 주름이랑 속당김이 너무 심해요",
+    "platform": "sms"
   },
-  "preference": {
-    "texture": "산뜻한 젤 타입 선호",
-    "price_range": "3~5만원대"
+  {
+    "id": "u3",
+    "name": "박준수",
+    "age": 30,
+    "skin_type": "민감성",
+    "concern": "면도 후에 붉어지고 따가움",
+    "platform": "kakao"
   }
-}
+]

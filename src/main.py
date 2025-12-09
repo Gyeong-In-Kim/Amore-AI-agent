@@ -1,35 +1,57 @@
+import json
+import os
+import time
 from vector_db import init_db, search_best_product
 from generator import generate_marketing_copy
 
-def run_agent(user_query):
-    print(f"\n💬 [User]: {user_query}")
+def load_users():
+    """가상 고객 데이터 로드"""
+    # 상위 폴더의 data/users.json 찾기
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
+    file_path = os.path.join(project_root, 'data', 'users.json')
+    
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+def run_batch_agent():
+    print("🚀 [Amore Marketing Agent] 대량 발송 작업을 시작합니다...")
     print("--------------------------------------------------")
     
-    # 1. DB 초기화 (데이터 로드)
+    # 1. 시스템 준비
     init_db()
+    users = load_users()
     
-    # 2. 검색 (Retrieve) - RAG의 R
-    print("🔍 고객님에게 딱 맞는 제품을 찾는 중...")
-    best_product = search_best_product(user_query)
+    print(f"📋 총 {len(users)}명의 타겟 고객을 발견했습니다.\n")
     
-    if not best_product:
-        print("❌ 적절한 제품을 찾지 못했습니다.")
-        return
-
-    print(f"✅ 찾은 제품: {best_product['name']}")
-    
-    # 3. 생성 (Generate) - RAG의 G
-    print("✍️ 마케팅 메시지 작성 중...")
-    copy_text = generate_marketing_copy(best_product, user_query)
-    
-    # 4. 결과 출력
-    print("\n[📩 생성된 메시지]")
-    print("==================================================")
-    print(copy_text)
-    print("==================================================")
+    # 2. 고객 한 명씩 순회하며 작업 (Loop)
+    for user in users:
+        print(f"👤 고객 분석 중: {user['name']} ({user['age']}세, {user['skin_type']})")
+        
+        # (1) 검색: 고객 고민을 쿼리로 변환해서 검색
+        # "지성 피부인데 오후만 되면 화장이 무너짐" -> 이런 식으로 검색
+        query = f"{user['skin_type']} 피부, {user['concern']}"
+        best_product = search_best_product(query)
+        
+        if not best_product:
+            print("   → ❌ 적합한 제품을 못 찾음 (패스)")
+            continue
+            
+        print(f"   → 🔍 매칭 제품: {best_product['name']}")
+        
+        # (2) 생성: 개인화 메시지 작성
+        # user 정보를 통째로 넘기지 않고, 필요한 문자열만 조합해서 넘김
+        user_context = f"{user['name']}님({user['age']}세), 고민: {user['concern']}"
+        copy_text = generate_marketing_copy(best_product, user_context)
+        
+        # (3) 결과 출력 (실제로는 여기서 카톡 API를 쏘게 됨)
+        print(f"\n   📩 [발송할 메시지 ({user['platform']})]")
+        print("   " + "-" * 30)
+        print(f"   {copy_text.strip()}")
+        print("   " + "-" * 30 + "\n")
+        
+        # API 과부하 방지용 딜레이
+        time.sleep(1) 
 
 if __name__ == "__main__":
-    # 테스트하고 싶은 가상의 고객 질문
-    test_query = "요즘 얼굴이 너무 건조하고 화장이 떠요."
-    
-    run_agent(test_query)
+    run_batch_agent()
