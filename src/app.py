@@ -36,7 +36,7 @@ if st.button("🚀 솔루션 분석 시작"):
         with st.spinner("🔍 제품 데이터베이스 검색 중..."):
             # DB 초기화 및 검색 (캐싱을 위해 함수로 분리하면 더 좋지만 일단 직관적으로 작성)
             collection = init_db() 
-            best_product = search_best_product(collection, query)
+            best_product = search_best_product(query)
         
         if best_product:
             # 검색 결과 표시
