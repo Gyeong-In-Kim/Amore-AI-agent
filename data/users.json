@@ -1,26 +1,137 @@
 [
-  {
-    "id": "u1",
-    "name": "김민지",
-    "age": 20,
-    "skin_type": "지성",
-    "concern": "오후만 되면 화장이 무너지고 기름짐",
-    "platform": "kakao"
-  },
-  {
-    "id": "u2",
-    "name": "이영희",
-    "age": 45,
-    "skin_type": "건성",
-    "concern": "눈가 주름이랑 속당김이 너무 심해요",
-    "platform": "sms"
-  },
-  {
-    "id": "u3",
-    "name": "박준수",
-    "age": 30,
-    "skin_type": "민감성",
-    "concern": "면도 후에 붉어지고 따가움",
-    "platform": "kakao"
-  }
+    {
+        "user_id": "user_001",
+        "name": "김지민",
+        "age": 24,
+        "gender": "Female",
+        "skin_type": "지성",
+        "concerns": [
+            "여드름",
+            "모공",
+            "유분기"
+        ],
+        "shopping_style": "가성비 중시, 리뷰 꼼꼼히 확인",
+        "preferred_category": "트러블 케어"
+    },
+    {
+        "user_id": "user_002",
+        "name": "이준호",
+        "age": 31,
+        "gender": "Male",
+        "skin_type": "복합성",
+        "concerns": [
+            "피지 조절",
+            "수분 부족"
+        ],
+        "shopping_style": "필요한 것만 구매, 올인원 선호",
+        "preferred_category": "수분/보습"
+    },
+    {
+        "user_id": "user_003",
+        "name": "박서연",
+        "age": 28,
+        "gender": "Female",
+        "skin_type": "건성",
+        "concerns": [
+            "속당김",
+            "각질",
+            "화장 들뜸"
+        ],
+        "shopping_style": "성분 분석 어플 활용, 비건 화장품 선호",
+        "preferred_category": "고보습 케어"
+    },
+    {
+        "user_id": "user_004",
+        "name": "최영수",
+        "age": 45,
+        "gender": "Male",
+        "skin_type": "중성",
+        "concerns": [
+            "주름",
+            "탄력 저하"
+        ],
+        "shopping_style": "브랜드 인지도 중시, 선물용 구매 다수",
+        "preferred_category": "안티에이징"
+    },
+    {
+        "user_id": "user_005",
+        "name": "정수진",
+        "age": 35,
+        "gender": "Female",
+        "skin_type": "민감성",
+        "concerns": [
+            "홍조",
+            "피부 자극",
+            "알레르기"
+        ],
+        "shopping_style": "재구매율 높음, 샘플 먼저 사용",
+        "preferred_category": "더마/진정"
+    },
+    {
+        "user_id": "user_006",
+        "name": "한민재",
+        "age": 29,
+        "gender": "Male",
+        "skin_type": "지성",
+        "concerns": [
+            "블랙헤드",
+            "넓은 모공"
+        ],
+        "shopping_style": "SNS 광고 보고 충동구매 경향 있음",
+        "preferred_category": "클렌징/모공"
+    },
+    {
+        "user_id": "user_007",
+        "name": "오혜림",
+        "age": 42,
+        "gender": "Female",
+        "skin_type": "건성",
+        "concerns": [
+            "기미",
+            "잡티",
+            "칙칙한 톤"
+        ],
+        "shopping_style": "세일 기간 대량 구매, 홈쇼핑 이용",
+        "preferred_category": "미백/화이트닝"
+    },
+    {
+        "user_id": "user_008",
+        "name": "강동우",
+        "age": 38,
+        "gender": "Male",
+        "skin_type": "복합성",
+        "concerns": [
+            "눈가 주름",
+            "다크서클"
+        ],
+        "shopping_style": "배우자 추천으로 구매, 정기 구독 선호",
+        "preferred_category": "아이케어"
+    },
+    {
+        "user_id": "user_009",
+        "name": "윤아름",
+        "age": 22,
+        "gender": "Female",
+        "skin_type": "중성",
+        "concerns": [
+            "피부결",
+            "메이크업 지속력"
+        ],
+        "shopping_style": "신상 체험 선호, 패키지 디자인 중시",
+        "preferred_category": "베이스/프라이머"
+    },
+    {
+        "user_id": "user_010",
+        "name": "송현석",
+        "age": 50,
+        "gender": "Male",
+        "skin_type": "건성",
+        "concerns": [
+            "검버섯",
+            "깊은 주름",
+            "건조함"
+        ],
+        "shopping_style": "고가 기능성 제품 선호, 오프라인 매장 방문",
+        "preferred_category": "프리미엄 라인"
+    }
 ]
