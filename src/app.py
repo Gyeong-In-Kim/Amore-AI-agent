@@ -79,7 +79,8 @@ with left_col:
         st.write("---")
         
         # 🔥 핵심 수정: 플로팅 분석 리포트 버튼 (Popover)
-    with st.popover("📊 실시간 분석 리포트 확인", use_container_width=True):
+    st.subheader("📊 데이터 분석")
+    with st.popover("캠페인 예측 지표", use_container_width=True):
         st.markdown("### 📈 Campaign Insights")
         st.caption("현재 설정 기준 AI 예측 수치입니다.")
             
@@ -127,7 +128,7 @@ with right_col:
     with st.container(border=True):
         st.text_input("제품/성분 검색", placeholder="예: 시카, 세럼")
         st.write("---")
-        st.write("**DB 검색 결과 (UI)**")
+        st.write("**DB 검색 결과**")
         st.caption("• 나노펩타이드 토너")
         st.caption("• 시카 리페어 크림")
         st.caption("• 비타민C 앰플")
