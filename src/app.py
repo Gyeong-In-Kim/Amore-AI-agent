@@ -1,255 +1,141 @@
 import streamlit as st
+import json
 import os
-import time
-from vector_db import init_db, search_best_product
-from generator import generate_marketing_copy
-from dotenv import load_dotenv
 
-# 1. 환경 변수 및 페이지 설정 (Wide 모드 필수)
-load_dotenv()
-st.set_page_config(
-    page_title="Adore AI Agent",
-    page_icon="✨",
-    layout="wide",  # 3단 구조를 위해 넓은 화면 사용
-    initial_sidebar_state="collapsed" # 사이드바 숨김 (헤더 중심 디자인)
-)
+# 1. 페이지 설정
+st.set_page_config(page_title="Glow Code", page_icon="✨", layout="wide")
 
-# 2. 커스텀 CSS (카드 디자인, 칩 스타일 등)
+# 2. 커스텀 CSS (날씨, 뱃지, 분석 카드 등)
 st.markdown("""
 <style>
-    /* 전체 폰트 및 배경 조정 */
-    .block-container { padding-top: 2rem; }
+    .header-container { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; margin-bottom: 20px; }
+    .weather-box { background-color: #f0f2f6; padding: 10px 20px; border-radius: 10px; border: 1px solid #ddd; font-size: 14px; }
     
-    /* 상단 헤더 스타일 */
-    .header-title { font-size: 28px; font-weight: 800; color: #333; }
-    .header-subtitle { font-size: 14px; color: #666; }
-    
-    /* 요약 컨텍스트 바 */
-    .context-bar {
-        background-color: #f0f2f6;
-        padding: 15px;
-        border-radius: 10px;
-        margin-bottom: 25px;
-        display: flex;
-        gap: 20px;
-        align-items: center;
-        border: 1px solid #e0e0e0;
-    }
-    .context-label { font-weight: bold; color: #555; font-size: 14px; }
-    .context-chip {
+    /* 분석 지표 카드 (플로팅 창 내부용) */
+    .analysis-card {
         background-color: #ffffff;
-        padding: 5px 12px;
-        border-radius: 15px;
-        border: 1px solid #ddd;
-        font-size: 13px;
-        color: #333;
-        font-weight: 600;
-    }
-    
-    /* 메시지 카드 스타일 */
-    .message-card {
-        background-color: white;
-        border: 1px solid #e0e0e0;
+        border: 1px solid #e0e6ed;
         border-radius: 10px;
-        padding: 20px;
-        margin-bottom: 15px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        transition: transform 0.2s;
-    }
-    .message-card:hover { border-color: #ff4b4b; transform: translateY(-2px); }
-    .tag {
-        display: inline-block;
-        font-size: 11px;
-        padding: 3px 8px;
-        border-radius: 4px;
-        background-color: #fff4f4;
-        color: #ff4b4b;
-        margin-right: 5px;
+        padding: 10px;
+        text-align: center;
         margin-bottom: 10px;
     }
+    .analysis-val { font-size: 18px; font-weight: 800; color: #3182ce; }
+    .analysis-label { font-size: 11px; color: #718096; }
+
+    /* 매칭 점수 뱃지 */
+    .score-badge {
+        background-color: #ebf8ff;
+        color: #2b6cb0;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: bold;
+    }
     
-    /* 버튼 스타일링 */
-    .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; }
+    /* 고객 상태 뱃지 */
+    .badge { padding: 2px 8px; border-radius: 5px; font-size: 12px; font-weight: bold; color: white; margin-left: 5px; }
+    .badge-vip { background-color: #f1c40f; }
+    .badge-new { background-color: #2ecc71; }
+    .badge-churn { background-color: #e74c3c; }
 </style>
 """, unsafe_allow_html=True)
 
-# 3. 상태 관리 (생성된 메시지 저장)
-if 'generated_results' not in st.session_state:
-    st.session_state['generated_results'] = []
+# 3. 데이터 로드 함수
+def get_users():
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        with open(os.path.join(project_root, 'data', 'users.json'), 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return [{"name": f"고객{i+1}", "age": 25+i, "skin_type": "복합성", "concerns": ["모공"]} for i in range(10)]
 
-# --- [1️⃣ 최상단 헤더 영역] ---
-col_h1, col_h2 = st.columns([3, 1])
-with col_h1:
-    st.markdown('<div class="header-title">✨ Glow Code </div>', unsafe_allow_html=True)
-    st.caption("Data-driven Marketing Copilot")
-with col_h2:
-    # 우측: 프로젝트 선택 및 프로필
-    project = st.selectbox("📂 프로젝트/캠페인", ["12월 재구매 캠페인", "신규 가입 웰컴", "장바구니 리마인드"], label_visibility="collapsed")
+users = get_users()
+
+# --- [상단 헤더 영역] ---
+st.markdown(f"""
+<div class="header-container">
+    <div style="font-size: 32px; font-weight: 800;">✨ Glow Code</div>
+    <div class="weather-box">☀️ <b>오늘의 날씨</b>: 24°C / 맑음 (대구광역시)</div>
+</div>
+""", unsafe_allow_html=True)
 
 st.divider()
 
-# --- [UI 레이아웃 구성: 3단 구조] ---
-# 왼쪽(전략) : 가운데(생성) : 오른쪽(결과) = 1 : 1.5 : 1.5
-col_left, col_center, col_right = st.columns([1, 1.4, 1.6])
+# --- [메인 레이아웃: 3단 구조] ---
+left_col, center_col, right_col = st.columns([1, 2.5, 1.2], gap="large")
 
-
-# --- [⬅️ 왼쪽: 메시지 전략 선택 패널] ---
-with col_left:
+# 🟦 [LEFT] 전략 설정 & 플로팅 분석 버튼
+with left_col:
     st.subheader("🛠️ 전략 설정")
-    
-    # 1) 메시지 목적
-    st.markdown("**🎯 메시지 목적**")
-    purpose = st.radio(
-        "목적 선택",
-        ["신규 고객 유입", "재구매 유도", "이탈 고객 리마인드"],
-        label_visibility="collapsed"
-    )
-    
-    st.markdown("---")
-    
-    # 2) 고객 상태
-    st.markdown("**👥 타겟 고객 상태**")
-    status_options = {
-        "recent_visit": "최근 7일 내 방문",
-        "cart_abandon": "장바구니 이탈",
-        "purchased": "최근 구매 완료",
-        "inactive": "장기 미접속"
-    }
-    selected_status = []
-    for key, label in status_options.items():
-        if st.checkbox(label, key=key):
-            selected_status.append(label)
+    with st.container(border=True):
+        st.write("**🎯 발송 목적 선택**")
+        st.checkbox("신규 가입 웰컴", value=True)
+        st.checkbox("재구매 유도", value=True)
+        st.checkbox("장바구니 리마인드")
+        st.checkbox("이탈 방지 SOS")
+        
+        st.write("---")
+        
+        # 🔥 핵심 수정: 플로팅 분석 리포트 버튼 (Popover)
+    with st.popover("📊 실시간 분석 리포트 확인", use_container_width=True):
+        st.markdown("### 📈 Campaign Insights")
+        st.caption("현재 설정 기준 AI 예측 수치입니다.")
             
-    st.markdown("---")
-
-    # 3) 톤 & 스타일
-    st.markdown("**🎨 톤 & 매너**")
-    tone = st.select_slider(
-        "톤 선택",
-        options=["친근한", "신뢰감 있는", "긴급한", "감성적인"],
-        value="친근한"
-    )
-    brand_voice = st.checkbox("브랜드 말투 적용 (Adore Tone)", value=True)
-
-
-# --- [2️⃣ 상단 요약 컨텍스트 바 (헤더 아래, 메인 위)] ---
-# *왼쪽 패널의 선택값에 따라 동적으로 변함*
-context_summary = f"""
-<div class="context-bar">
-    <span class="context-label">📌 현재 설정:</span>
-    <span class="context-chip">🎯 {purpose}</span>
-    <span class="context-chip">👥 {', '.join(selected_status) if selected_status else '타겟 미설정'}</span>
-    <span class="context-chip">🎨 {tone}</span>
-    <span class="context-chip">📢 문자(SMS)</span>
-</div>
-"""
-# 컨텍스트 바는 전체 너비로 보여주거나, 중앙 컬럼 상단에 배치
-# 여기서는 3단 구조 안에 자연스럽게 녹이기 위해 중앙 컬럼 상단에 배치합니다.
-
-
-# --- [🟦 가운데: 메시지 생성 영역] ---
-with col_center:
-    st.markdown(context_summary, unsafe_allow_html=True) # 요약 바 배치
-    
-    st.subheader("⚡ AI 메시지 생성")
-    
-    # 자동 요약 텍스트 (Read-only 느낌)
-    summary_text = f"**'{', '.join(selected_status) if selected_status else '모든'}'** 고객에게 **'{tone}'** 톤으로 **'{purpose}'**를 위한 메시지를 생성합니다."
-    st.info(summary_text, icon="🤖")
-    
-    # 추가 요청 입력
-    additional_req = st.text_area(
-        "✍️ 추가 요청사항 (옵션)", 
-        placeholder="예: 이번 주말 한정 혜택이라는 점을 강조해줘, 이모지 많이 써줘",
-        height=100
-    )
-    
-    # 옵션
-    c_opt1, c_opt2 = st.columns(2)
-    with c_opt1:
-        count_opt = st.checkbox("메시지 3개 생성", value=True)
-    with c_opt2:
-        ab_test_opt = st.checkbox("A/B 테스트용 변형 포함")
-    
-    st.markdown("###") # 여백
-    
-    # [생성하기] 버튼
-    if st.button("✨ 메시지 생성하기", type="primary", use_container_width=True):
-        if not selected_status:
-            st.warning("타겟 고객 상태를 최소 하나 이상 선택해주세요!")
-        else:
-            with st.spinner("🔍 고객 데이터 분석 및 카피 작성 중... (약 5초 소요)"):
-                # 1. 검색 쿼리 구성
-                search_query = f"{purpose}를 위한 화장품 추천, 타겟: {', '.join(selected_status)}, 톤: {tone}"
-                if additional_req:
-                    search_query += f", 추가요청: {additional_req}"
-                
-                # 2. RAG 검색 (기존 모듈 활용)
-                # (실제로는 여기서 DB 검색이 돌지만, 데모를 위해 로직 연결)
-                collection = init_db()
-                best_product = search_best_product(search_query)
-                
-                # 3. 메시지 생성 (기존 모듈 활용)
-                # 여러 개 생성 요청 시 반복 호출
-                generated_list = []
-                try:
-                    # 첫 번째 메시지
-                    msg1 = generate_marketing_copy(best_product, f"상황: {search_query}")
-                    generated_list.append({"text": msg1, "tags": ["👍 클릭 유도", "⏱ 간결함"]})
-                    
-                    # (데모용) 추가 메시지 시뮬레이션
-                    if count_opt:
-                         # 실제로는 프롬프트를 다르게 해서 다시 호출해야 함
-                         generated_list.append({"text": f"(B안) {msg1.replace('하세요', '해볼까요?')}", "tags": ["⚖️ 감성 소구", "A/B 테스트"]})
-                         generated_list.append({"text": f"(C안) [긴급] {msg1[:30]}...", "tags": ["🔥 긴급성", "짧은 호흡"]})
-                    
-                    st.session_state['generated_results'] = generated_list
-                    st.toast("메시지 생성이 완료되었습니다!", icon="✅")
-                    
-                except Exception as e:
-                    st.error(f"생성 중 오류 발생: {e}")
-
-
-# --- [➡️ 오른쪽: 결과 & 액션 패널] ---
-with col_right:
-    st.subheader("📂 생성 결과 & 액션")
-    
-    if st.session_state['generated_results']:
-        # 1) 생성 결과 리스트
-        for idx, item in enumerate(st.session_state['generated_results']):
-            # 카드 형태 컨테이너
-            with st.container():
-                st.markdown(f"""
-                <div class="message-card">
-                    <div style="margin-bottom:8px;">
-                        {' '.join([f'<span class="tag">{tag}</span>' for tag in item['tags']])}
-                    </div>
-                    <div style="font-size:15px; line-height:1.6; margin-bottom:15px;">
-                        {item['text']}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # 카드 하단 액션 버튼 (작게 배치)
-                b_col1, b_col2, b_col3 = st.columns([1, 1, 1])
-                with b_col1:
-                    if st.button("복사", key=f"copy_{idx}"):
-                        st.toast("클립보드에 복사되었습니다!")
-                with b_col2:
-                    st.button("수정", key=f"edit_{idx}")
-                with b_col3:
-                    st.button("저장", key=f"save_{idx}")
+        p_col1, p_col2 = st.columns(2)
+        with p_col1:
+            st.markdown('<div class="analysis-card"><div class="analysis-val">84%</div><div class="analysis-label">매칭률</div></div>', unsafe_allow_html=True)
+            st.markdown('<div class="analysis-card"><div class="analysis-val">12.5%</div><div class="analysis-label">예상 CTR</div></div>', unsafe_allow_html=True)
+        with p_col2:
+            st.markdown('<div class="analysis-card"><div class="analysis-val">10명</div><div class="analysis-label">타겟수</div></div>', unsafe_allow_html=True)
+            st.markdown('<div class="analysis-card"><div class="analysis-val">₩452k</div><div class="analysis-label">기대매출</div></div>', unsafe_allow_html=True)
             
-            st.markdown("---") # 구분선
-            
-        # 3) 하단 글로벌 액션 영역
-        st.markdown("#### 🚀 실행 액션")
-        g_col1, g_col2 = st.columns(2)
-        with g_col1:
-            st.button("CRM 발송 예약", use_container_width=True)
-        with g_col2:
-            st.button("팀원 공유하기", use_container_width=True)
-            
-    else:
-        # 결과 없을 때 빈 화면 안내
-        st.container(border=True).info("👈 왼쪽에서 조건을 설정하고\n\n'메시지 생성하기'를 눌러주세요.")
+        st.info("💡 팁: '재구매 유도' 목적 선택 시 예상 매출이 15% 상승합니다.")
+
+# 🟦 [CENTER] 메인 작업 영역
+with center_col:
+    st.subheader("✉️ CRM 메시지 작성")
+    
+    if st.button("🚀 메시지 일괄 생성 시작", type="primary", use_container_width=True):
+        st.session_state['msg_generated'] = True
+
+    st.write("---")
+    
+    # 10명의 고객 리스트
+    for i, user in enumerate(users[:10]):
+        # 고객 정보 및 뱃지
+        status_badge = '<span class="badge badge-vip">VIP</span>' if i % 4 == 0 else '<span class="badge badge-new">NEW</span>'
+        
+        col_info, col_prod = st.columns([2, 1])
+        with col_info:
+            st.markdown(f"**{user['name']}** ({user['age']}세) {status_badge} <span class='score-badge'>매칭 9{9-i}%</span>", unsafe_allow_html=True)
+            st.caption(f"페르소나: 성분 중심 실속파 / 고민: {', '.join(user['concerns'])}")
+        with col_prod:
+            st.markdown(f"📦 **추천**: `제품 {i+1}`")
+        
+        default_msg = ""
+        if st.session_state.get('msg_generated'):
+            default_msg = f"[Glow Code] {user['name']}님, {user['concerns'][0]} 고민을 해결할 특별한 추천템을 확인해보세요! ✨"
+        
+        st.text_area(f"msg_{i}", value=default_msg, height=80, label_visibility="collapsed")
+        st.write("")
+
+# 🟦 [RIGHT] 상품 검색 탭
+with right_col:
+    st.subheader("🔍 상품 검색")
+    with st.container(border=True):
+        st.text_input("제품/성분 검색", placeholder="예: 시카, 세럼")
+        st.write("---")
+        st.write("**DB 검색 결과 (UI)**")
+        st.caption("• 나노펩타이드 토너")
+        st.caption("• 시카 리페어 크림")
+        st.caption("• 비타민C 앰플")
+
+# --- [하단 전송 제어] ---
+st.divider()
+b_left, b_right = st.columns([3, 1])
+with b_left:
+    confirm = st.checkbox("✅ 모든 메시지와 분석 수치를 최종 확인했습니다.")
+with b_right:
+    st.button("📩 메시지 일괄 전송", type="primary", use_container_width=True, disabled=not confirm)
