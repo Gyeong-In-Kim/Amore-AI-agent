@@ -2,181 +2,172 @@ import streamlit as st
 import os
 import json
 import time
-from vector_db import init_db, search_best_product  #
-from generator import generate_marketing_copy      #
+import requests
+import pandas as pd
+from collections import Counter
+from vector_db import init_db, search_best_product
+from generator import generate_marketing_copy
 from dotenv import load_dotenv
 
+# 1. 기본 설정
 load_dotenv()
 
-#초기 설정 및 DB 준비
 if 'db_initialized' not in st.session_state:
     init_db()
-    st.session_state['db_initialized'] = True  
-    
-#메시지 저장용 세션 상태
+    st.session_state['db_initialized'] = True
 if 'messages' not in st.session_state:
     st.session_state['messages'] = {}
 
-# 페이지 설정
 st.set_page_config(page_title="Glow Code", page_icon="✨", layout="wide")
 
-# 커스텀 CSS (날씨, 뱃지, 분석 카드 등)
-st.markdown("""
-<style>
-    .header-container { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; margin-bottom: 20px; }
-    .weather-box { background-color: #f0f2f6; padding: 10px 20px; border-radius: 10px; border: 1px solid #ddd; font-size: 14px; }
-    
-    /* 분석 지표 카드 (플로팅 창 내부용) */
-    .analysis-card {
-        background-color: #ffffff;
-        border: 1px solid #e0e6ed;
-        border-radius: 10px;
-        padding: 10px;
-        text-align: center;
-        margin-bottom: 10px;
-    }
-    .analysis-val { font-size: 18px; font-weight: 800; color: #3182ce; }
-    .analysis-label { font-size: 11px; color: #718096; }
+# 2. 유틸리티 함수 (날씨, 사용자 로드)
+def get_weather(city="Daegu"):
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+    if not api_key: return "☀️ 24°C / 맑음"
+    try:
+        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric&lang=kr"
+        res = requests.get(url).json()
+        return f"🌡️ {res['main']['temp']}°C / {res['weather'][0]['description']}"
+    except: return "☀️ 날씨 정보 수신 불가"
 
-    /* 매칭 점수 뱃지 */
-    .score-badge {
-        background-color: #ebf8ff;
-        color: #2b6cb0;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: bold;
-    }
-    
-    /* 고객 상태 뱃지 */
-    .badge { padding: 2px 8px; border-radius: 5px; font-size: 12px; font-weight: bold; color: white; margin-left: 5px; }
-    .badge-vip { background-color: #f1c40f; }
-    .badge-new { background-color: #2ecc71; }
-    .badge-churn { background-color: #e74c3c; }
-</style>
-""", unsafe_allow_html=True)
-
-# 3. 데이터 로드 함수
 def get_users():
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(current_dir)
-        with open(os.path.join(project_root, 'data', 'users.json'), 'r', encoding='utf-8') as f:
+        file_path = os.path.join(project_root, 'data', 'users.json')
+        with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except:
         return [{"name": f"고객{i+1}", "age": 25+i, "skin_type": "복합성", "concerns": ["모공"]} for i in range(10)]
 
-users = get_users()
-
-# --- [상단 헤더 영역] ---
-st.markdown(f"""
-<div class="header-container">
-    <div style="font-size: 32px; font-weight: 800;">✨ Glow Code</div>
-    <div class="weather-box">☀️ <b>오늘의 날씨</b>: 24°C / 맑음 (대구광역시)</div>
-</div>
+# 3. CSS 스타일링
+st.markdown("""
+<style>
+    .weather-box { background-color: #f0f2f6; padding: 10px 20px; border-radius: 10px; border: 1px solid #ddd; font-weight: bold; color: #555; }
+    .score-badge { background-color: #ebf8ff; color: #2b6cb0; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+    /* 팝업 내부 스타일 */
+    div[data-testid="stPopoverBody"] { min-width: 500px !important; }
+</style>
 """, unsafe_allow_html=True)
 
+# --- [상단 헤더] ---
+weather = get_weather()
+col_h1, col_h2 = st.columns([3, 1])
+with col_h1: st.title("✨ Glow Code")
+with col_h2: st.markdown(f'<div class="weather-box">{weather}</div>', unsafe_allow_html=True)
 st.divider()
 
-# --- [메인 레이아웃: 3단 구조] ---
+# --- [메인 레이아웃] ---
 left_col, center_col, right_col = st.columns([1, 2.5, 1.2], gap="large")
 
 # 🟦 [LEFT] 전략 설정 & 플로팅 분석 버튼
 with left_col:
     st.subheader("🛠️ 전략 설정")
     with st.container(border=True):
-        st.write("**🎯 발송 목적 선택**")
+        mode = st.radio("모드 선택", ["모드 1: 고객 맞춤", "모드 2: 제품 교육", "모드 3: 시즌/날씨"])
+        st.write("---")
         st.checkbox("신규 가입 웰컴", value=True)
-        st.checkbox("재구매 유도", value=True)
+        st.checkbox("재구매 유도")
         st.checkbox("장바구니 리마인드")
         st.checkbox("이탈 방지 SOS")
-        
-        st.write("---")
-        
-        # 🔥 핵심 수정: 플로팅 분석 리포트 버튼 (Popover)
-    st.subheader("📊 데이터 분석")
-    with st.popover("캠페인 예측 지표", use_container_width=True):
-        st.markdown("### 📈 Campaign Insights")
-        st.caption("현재 설정 기준 AI 예측 수치입니다.")
-            
-        p_col1, p_col2 = st.columns(2)
-        with p_col1:
-            st.markdown('<div class="analysis-card"><div class="analysis-val">84%</div><div class="analysis-label">매칭률</div></div>', unsafe_allow_html=True)
-            st.markdown('<div class="analysis-card"><div class="analysis-val">12.5%</div><div class="analysis-label">예상 CTR</div></div>', unsafe_allow_html=True)
-        with p_col2:
-            st.markdown('<div class="analysis-card"><div class="analysis-val">10명</div><div class="analysis-label">타겟수</div></div>', unsafe_allow_html=True)
-            st.markdown('<div class="analysis-card"><div class="analysis-val">₩452k</div><div class="analysis-label">기대매출</div></div>', unsafe_allow_html=True)
-            
-        st.info("💡 팁: '재구매 유도' 목적 선택 시 예상 매출이 15% 상승합니다.")
 
-# 🟦 [CENTER] 메인 작업 영역
+    st.write("") # 여백
+    
+    # 🔥 [핵심 기능] 플로팅 분석 리포트 버튼 (차트 포함)
+    st.subheader("📊 데이터 분석")
+    with st.popover("📊 실시간 데이터 분석 리포트", use_container_width=True):
+        st.markdown("### 📈 Campaign Insights")
+        
+        # (1) KPI 지표
+        m1, m2, m3 = st.columns(3)
+        m1.metric("타겟 고객", "10명")
+        m2.metric("매칭 성공률", "94%", "+2%")
+        m3.metric("기대 매출", "₩452k", "High")
+        
+        st.divider()
+        
+        # 데이터 준비
+        target_users = get_users()[:10]
+        df_users = pd.DataFrame(target_users)
+        
+        # (2) 차트 시각화
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**🧴 피부 타입 분포**")
+            if not df_users.empty:
+                skin_counts = df_users['skin_type'].value_counts()
+                st.bar_chart(skin_counts, color="#FF9AA2", height=200)
+        
+        with c2:
+            st.markdown("**😟 주요 고민 TOP 5**")
+            if not df_users.empty:
+                all_concerns = [c for sublist in df_users['concerns'] for c in sublist]
+                top_concerns = Counter(all_concerns).most_common(5)
+                df_concerns = pd.DataFrame(top_concerns, columns=['키워드', '수']).set_index('키워드')
+                st.bar_chart(df_concerns, color="#90CDF4", height=200)
+        
+        # (3) AI 전략 제안
+        if not df_users.empty:
+            top_k = Counter([c for sublist in df_users['concerns'] for c in sublist]).most_common(1)[0][0]
+            st.info(f"💡 **AI 제안:** 현재 **'{top_k}'** 고민이 가장 많습니다. 메시지에 **{top_k} 케어 효능**을 강조하면 반응률이 높아질 것입니다.")
+
+# 🟦 [CENTER] 메시지 생성 및 관리
 with center_col:
     st.subheader("✉️ CRM 메시지 대시보드")
     
     if st.button("🚀 10명 고객 메시지 일괄 생성", type="primary", use_container_width=True):
-        progress_text = st.empty()
         progress_bar = st.progress(0)
+        start_time = time.time()
         
-        for i, user in enumerate(users[:10]):
-            progress_text.text(f"🔄 {user['name']}님을 위한 최적의 제품 매칭 중... ({i+1}/10)")
-            
-            # (1) 검색: 고객의 피부타입과 고민(concerns)으로 검색
-            # 최근 수정한 'concerns' 키를 사용
+        for i, user in enumerate(get_users()[:10]):
+            # 검색 쿼리 생성 (모드 반영)
             query = f"{user['skin_type']} 피부, 고민: {', '.join(user['concerns'])}"
-            best_product = search_best_product(query)
+            if "모드 3" in mode: query += f", 현재 날씨: {weather}"
             
+            # 검색 및 생성
+            best_product = search_best_product(query)
             if best_product:
-                # (2) 생성: 검색된 제품으로 마케팅 문구 생성
-                context = f"고객명: {user['name']}, 고민: {query}"
+                context = f"고객: {user['name']}, 고민: {query}"
                 copy = generate_marketing_copy(best_product, context)
-                
-                # 세션에 저장
-                st.session_state['messages'][i] = {
-                    "product": best_product['product_name'],
-                    "copy": copy
-                }
+                st.session_state['messages'][i] = {"product": best_product['name'], "copy": copy}
             
             progress_bar.progress((i + 1) / 10)
-        
-        progress_text.text("✅ 모든 메시지 생성 완료!")
-        st.session_state['msg_generated'] = True
-        time.sleep(1)
-        progress_text.empty()
+            
+        st.session_state['gen_time'] = f"{round(time.time() - start_time, 2)}초"
         progress_bar.empty()
+    
+    if 'gen_time' in st.session_state:
+        st.caption(f"⏱️ 생성 완료! (소요 시간: {st.session_state['gen_time']})")
 
     st.write("---")
     
-    # 10명의 고객 리스트 출력
-    for i, user in enumerate(users[:10]):
-        col_info, col_prod = st.columns([2, 1])
+    # 고객 리스트 출력
+    for i, user in enumerate(get_users()[:10]):
+        msg_data = st.session_state['messages'].get(i, {"product": "-", "copy": ""})
         
-        # 세션에 생성된 데이터가 있으면 가져오고, 없으면 비워둠
-        saved_data = st.session_state['messages'].get(i, {"product": "대기 중...", "copy": ""})
+        c1, c2 = st.columns([2, 1])
+        with c1: st.markdown(f"**{user['name']}** <span class='score-badge'>Match 9{9-i}%</span>", unsafe_allow_html=True)
+        with c2: st.caption(f"📦 {msg_data['product']}")
         
-        with col_info:
-            st.markdown(f"**{user['name']}** ({user['age']}세) <span class='score-badge'>Match 9{9-i}%</span>", unsafe_allow_html=True)
-            st.caption(f"고민: {', '.join(user['concerns'])}")
-        with col_prod:
-            st.markdown(f"📦 **추천**: `{saved_data['product']}`")
-        
-        # 마케팅 담당자가 직접 수정 가능한 텍스트 영역
-        st.text_area(f"msg_{i}", value=saved_data['copy'], height=100, key=f"text_area_{i}", label_visibility="collapsed")
+        st.text_area(f"{user['name']}님 메시지", value=msg_data['copy'], height=100, key=f"edit_{i}", label_visibility="collapsed")
         st.write("")
-# 🟦 [RIGHT] 상품 검색 탭
+
+# 🟦 [RIGHT] 실시간 검색
 with right_col:
     st.subheader("🔍 상품 검색")
-    with st.container(border=True):
-        st.text_input("제품/성분 검색", placeholder="예: 시카, 세럼")
-        st.write("---")
-        st.write("**DB 검색 결과 (UI)**")
-        st.caption("• 나노펩타이드 토너")
-        st.caption("• 시카 리페어 크림")
-        st.caption("• 비타민C 앰플")
+    search_q = st.text_input("제품/성분 검색", placeholder="예: 시카, 안티에이징")
+    if search_q:
+        res = search_best_product(search_q)
+        if res:
+            with st.container(border=True):
+                st.markdown(f"**{res['name']}**")
+                st.caption(f"💰 {res['price']}원")
+                st.write(res['description'])
+        else:
+            st.warning("검색 결과가 없습니다.")
 
-# --- [하단 전송 제어] ---
+# --- [하단 전송] ---
 st.divider()
-b_left, b_right = st.columns([3, 1])
-with b_left:
-    confirm = st.checkbox("✅ 모든 메시지와 분석 수치를 최종 확인했습니다.")
-with b_right:
-    st.button("📩 메시지 일괄 전송", type="primary", use_container_width=True, disabled=not confirm)
+b_l, b_r = st.columns([3, 1])
+with b_l: confirm = st.checkbox("✅ 분석 리포트와 메시지를 모두 확인했습니다.")
+with b_r: st.button("📩 전송하기", type="primary", use_container_width=True, disabled=not confirm)
