@@ -1,11 +1,26 @@
 import streamlit as st
-import json
 import os
+import json
+import time
+from vector_db import init_db, search_best_product  #
+from generator import generate_marketing_copy      #
+from dotenv import load_dotenv
 
-# 1. 페이지 설정
+load_dotenv()
+
+#초기 설정 및 DB 준비
+if 'db_initialized' not in st.session_state:
+    init_db()
+    st.session_state['db_initialized'] = True  
+    
+#메시지 저장용 세션 상태
+if 'messages' not in st.session_state:
+    st.session_state['messages'] = {}
+
+# 페이지 설정
 st.set_page_config(page_title="Glow Code", page_icon="✨", layout="wide")
 
-# 2. 커스텀 CSS (날씨, 뱃지, 분석 카드 등)
+# 커스텀 CSS (날씨, 뱃지, 분석 카드 등)
 st.markdown("""
 <style>
     .header-container { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; margin-bottom: 20px; }
@@ -96,39 +111,64 @@ with left_col:
 
 # 🟦 [CENTER] 메인 작업 영역
 with center_col:
-    st.subheader("✉️ CRM 메시지 작성")
+    st.subheader("✉️ CRM 메시지 대시보드")
     
-    if st.button("🚀 메시지 일괄 생성 시작", type="primary", use_container_width=True):
+    if st.button("🚀 10명 고객 메시지 일괄 생성", type="primary", use_container_width=True):
+        progress_text = st.empty()
+        progress_bar = st.progress(0)
+        
+        for i, user in enumerate(users[:10]):
+            progress_text.text(f"🔄 {user['name']}님을 위한 최적의 제품 매칭 중... ({i+1}/10)")
+            
+            # (1) 검색: 고객의 피부타입과 고민(concerns)으로 검색
+            # 최근 수정한 'concerns' 키를 사용
+            query = f"{user['skin_type']} 피부, 고민: {', '.join(user['concerns'])}"
+            best_product = search_best_product(query)
+            
+            if best_product:
+                # (2) 생성: 검색된 제품으로 마케팅 문구 생성
+                context = f"고객명: {user['name']}, 고민: {query}"
+                copy = generate_marketing_copy(best_product, context)
+                
+                # 세션에 저장
+                st.session_state['messages'][i] = {
+                    "product": best_product['product_name'],
+                    "copy": copy
+                }
+            
+            progress_bar.progress((i + 1) / 10)
+        
+        progress_text.text("✅ 모든 메시지 생성 완료!")
         st.session_state['msg_generated'] = True
+        time.sleep(1)
+        progress_text.empty()
+        progress_bar.empty()
 
     st.write("---")
     
-    # 10명의 고객 리스트
+    # 10명의 고객 리스트 출력
     for i, user in enumerate(users[:10]):
-        # 고객 정보 및 뱃지
-        status_badge = '<span class="badge badge-vip">VIP</span>' if i % 4 == 0 else '<span class="badge badge-new">NEW</span>'
-        
         col_info, col_prod = st.columns([2, 1])
+        
+        # 세션에 생성된 데이터가 있으면 가져오고, 없으면 비워둠
+        saved_data = st.session_state['messages'].get(i, {"product": "대기 중...", "copy": ""})
+        
         with col_info:
-            st.markdown(f"**{user['name']}** ({user['age']}세) {status_badge} <span class='score-badge'>매칭 9{9-i}%</span>", unsafe_allow_html=True)
-            st.caption(f"페르소나: 성분 중심 실속파 / 고민: {', '.join(user['concerns'])}")
+            st.markdown(f"**{user['name']}** ({user['age']}세) <span class='score-badge'>Match 9{9-i}%</span>", unsafe_allow_html=True)
+            st.caption(f"고민: {', '.join(user['concerns'])}")
         with col_prod:
-            st.markdown(f"📦 **추천**: `제품 {i+1}`")
+            st.markdown(f"📦 **추천**: `{saved_data['product']}`")
         
-        default_msg = ""
-        if st.session_state.get('msg_generated'):
-            default_msg = f"[Glow Code] {user['name']}님, {user['concerns'][0]} 고민을 해결할 특별한 추천템을 확인해보세요! ✨"
-        
-        st.text_area(f"msg_{i}", value=default_msg, height=80, label_visibility="collapsed")
+        # 마케팅 담당자가 직접 수정 가능한 텍스트 영역
+        st.text_area(f"msg_{i}", value=saved_data['copy'], height=100, key=f"text_area_{i}", label_visibility="collapsed")
         st.write("")
-
 # 🟦 [RIGHT] 상품 검색 탭
 with right_col:
     st.subheader("🔍 상품 검색")
     with st.container(border=True):
         st.text_input("제품/성분 검색", placeholder="예: 시카, 세럼")
         st.write("---")
-        st.write("**DB 검색 결과**")
+        st.write("**DB 검색 결과 (UI)**")
         st.caption("• 나노펩타이드 토너")
         st.caption("• 시카 리페어 크림")
         st.caption("• 비타민C 앰플")
