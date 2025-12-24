@@ -1,5 +1,6 @@
 import json
 import os
+from sys import platform
 import time
 from vector_db import init_db, search_best_product
 from generator import generate_marketing_copy
@@ -30,7 +31,7 @@ def run_batch_agent():
         
         # (1) 검색: 고객 고민을 쿼리로 변환해서 검색
         # "지성 피부인데 오후만 되면 화장이 무너짐" -> 이런 식으로 검색
-        query = f"{user['skin_type']} 피부, {user['concern']}"
+        query = f"{user['skin_type']} 피부, 고민: {', '.join(user['concerns'])}"
         best_product = search_best_product(query)
         
         if not best_product:
@@ -41,11 +42,13 @@ def run_batch_agent():
         
         # (2) 생성: 개인화 메시지 작성
         # user 정보를 통째로 넘기지 않고, 필요한 문자열만 조합해서 넘김
-        user_context = f"{user['name']}님({user['age']}세), 고민: {user['concern']}"
+        user_context = f"{user['name']}님({user['age']}세), 고민: {', '.join(user['concerns'])}"
         copy_text = generate_marketing_copy(best_product, user_context)
         
         # (3) 결과 출력 (실제로는 여기서 카톡 API를 쏘게 됨)
-        print(f"\n   📩 [발송할 메시지 ({user['platform']})]")
+        # platform이 없으면 기본값으로 '알림톡'을 사용하도록 수정
+        platform = user.get('platform', '알림톡')
+        print(f"\n   📩 [발송할 메시지 ({platform})]")
         print("   " + "-" * 30)
         print(f"   {copy_text.strip()}")
         print("   " + "-" * 30 + "\n")
