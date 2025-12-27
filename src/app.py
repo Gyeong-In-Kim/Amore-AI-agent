@@ -22,13 +22,46 @@ st.set_page_config(page_title="Glow Code", page_icon="✨", layout="wide")
 
 # 2. 유틸리티 함수 (날씨, 사용자 로드)
 def get_weather(city="Daegu"):
+    """현재 날씨를 가져옵니다. (위치 표시 추가)"""
     api_key = os.getenv("OPENWEATHER_API_KEY")
-    if not api_key: return "☀️ 24°C / 맑음"
+    if not api_key: return "📍 대구 | ☀️ 24°C / 맑음 (API키 필요)"
+    
     try:
         url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric&lang=kr"
         res = requests.get(url).json()
-        return f"🌡️ {res['main']['temp']}°C / {res['weather'][0]['description']}"
-    except: return "☀️ 날씨 정보 수신 불가"
+        # [수정] 날씨 정보 앞에 위치(City)를 명시
+        return f"📍 {city} | 🌡️ {res['main']['temp']}°C / {res['weather'][0]['description']}"
+    except: 
+        return f"📍 {city} | ☀️ 날씨 정보 수신 불가"
+    
+def get_weekly_forecast(city="Daegu"):
+    """OpenWeatherMap API를 통해 5일간의 날씨 예보를 가져와 요약합니다."""
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+    if not api_key: return "⚠️ API 키 필요"
+
+    try:
+        url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={api_key}&units=metric&lang=kr"
+        response = requests.get(url)
+        data = response.json()
+
+        if response.status_code != 200:
+            return "⚠️ 날씨 정보 수신 실패"
+
+        forecast_summary = []
+        today = time.strftime("%Y-%m-%d")
+
+        for item in data['list']:
+            dt_txt = item['dt_txt']
+            if "12:00:00" in dt_txt and today not in dt_txt:
+                date = dt_txt.split(" ")[0][5:]
+                temp = round(item['main']['temp'])
+                desc = item['weather'][0]['description']
+                forecast_summary.append(f"{date}: {temp}°C/{desc}")
+
+        return ", ".join(forecast_summary[:5])
+
+    except Exception as e:
+        return f"❌ 예보 오류: {str(e)}"
 
 def get_users():
     try:
@@ -45,16 +78,20 @@ st.markdown("""
 <style>
     .weather-box { background-color: #f0f2f6; padding: 10px 20px; border-radius: 10px; border: 1px solid #ddd; font-weight: bold; color: #555; }
     .score-badge { background-color: #ebf8ff; color: #2b6cb0; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-    /* 팝업 내부 스타일 */
     div[data-testid="stPopoverBody"] { min-width: 500px !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- [상단 헤더] ---
-weather = get_weather()
+weather = get_weather("Daegu") # 여기서 도시 설정 (기본 대구)
 col_h1, col_h2 = st.columns([3, 1])
-with col_h1: st.title("✨ Glow Code")
-with col_h2: st.markdown(f'<div class="weather-box">{weather}</div>', unsafe_allow_html=True)
+
+with col_h1: 
+    st.title("✨ Glow Code")
+with col_h2: 
+    # 날씨 박스 출력
+    st.markdown(f'<div class="weather-box">{weather}</div>', unsafe_allow_html=True)
+
 st.divider()
 
 # --- [메인 레이아웃] ---
@@ -71,14 +108,12 @@ with left_col:
         st.checkbox("장바구니 리마인드")
         st.checkbox("이탈 방지 SOS")
 
-    st.write("") # 여백
+    st.write("") 
     
-    # 🔥 [핵심 기능] 플로팅 분석 리포트 버튼 (차트 포함)
     st.subheader("📊 데이터 분석")
     with st.popover("📊 실시간 데이터 분석 리포트", use_container_width=True):
         st.markdown("### 📈 Campaign Insights")
         
-        # (1) KPI 지표
         m1, m2, m3 = st.columns(3)
         m1.metric("타겟 고객", "10명")
         m2.metric("매칭 성공률", "94%", "+2%")
@@ -86,11 +121,9 @@ with left_col:
         
         st.divider()
         
-        # 데이터 준비
         target_users = get_users()[:10]
         df_users = pd.DataFrame(target_users)
         
-        # (2) 차트 시각화
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**🧴 피부 타입 분포**")
@@ -106,10 +139,12 @@ with left_col:
                 df_concerns = pd.DataFrame(top_concerns, columns=['키워드', '수']).set_index('키워드')
                 st.bar_chart(df_concerns, color="#90CDF4", height=200)
         
-        # (3) AI 전략 제안
         if not df_users.empty:
             top_k = Counter([c for sublist in df_users['concerns'] for c in sublist]).most_common(1)[0][0]
             st.info(f"💡 **AI 제안:** 현재 **'{top_k}'** 고민이 가장 많습니다. 메시지에 **{top_k} 케어 효능**을 강조하면 반응률이 높아질 것입니다.")
+
+    current_weather = get_weather("Daegu") 
+    weekly_forecast = get_weekly_forecast("Daegu")
 
 # 🟦 [CENTER] 메시지 생성 및 관리
 with center_col:
@@ -120,11 +155,12 @@ with center_col:
         start_time = time.time()
         
         for i, user in enumerate(get_users()[:10]):
-            # 검색 쿼리 생성 (모드 반영)
             query = f"{user['skin_type']} 피부, 고민: {', '.join(user['concerns'])}"
-            if "모드 3" in mode: query += f", 현재 날씨: {weather}"
             
-            # 검색 및 생성
+            # [모드 3] 주간 예보 반영
+            if "모드 3" in mode: 
+                query += f", (참고: 현재 날씨 {current_weather}, 주간 예보: {weekly_forecast})"
+                
             best_product = search_best_product(query)
             if best_product:
                 context = f"고객: {user['name']}, 고민: {query}"
@@ -141,7 +177,6 @@ with center_col:
 
     st.write("---")
     
-    # 고객 리스트 출력
     for i, user in enumerate(get_users()[:10]):
         msg_data = st.session_state['messages'].get(i, {"product": "-", "copy": ""})
         
@@ -170,4 +205,4 @@ with right_col:
 st.divider()
 b_l, b_r = st.columns([3, 1])
 with b_l: confirm = st.checkbox("✅ 분석 리포트와 메시지를 모두 확인했습니다.")
-with b_r: st.button("📩 전송하기", type="primary", use_container_width=True, disabled=not confirm)
+with b_r: st.button("📩 전송하기", type="primary", use_container_width=True, disabled=not confirm) 
