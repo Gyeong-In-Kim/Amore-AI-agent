@@ -150,42 +150,101 @@ with left_col:
 with center_col:
     st.subheader("✉️ CRM 메시지 대시보드")
     
+    # 1. 메시지 생성 버튼 클릭 시 실행되는 로직
     if st.button("🚀 10명 고객 메시지 일괄 생성", type="primary", use_container_width=True):
+        
+        #(1) 준비 작업 : DB 초기화 및 로딩바 생성
+        if 'db_initialized' not in st.session_state:
+            init_db()
+            st.session_state['db_initialized'] = True
+        
         progress_bar = st.progress(0)
+        status_text = st.empty()
         start_time = time.time()
         
-        for i, user in enumerate(get_users()[:10]):
-            query = f"{user['skin_type']} 피부, 고민: {', '.join(user['concerns'])}"
+        #(2) 고객 데이터 순회하며 메시지 생성
+        users = get_users()[:10] #10명 고객
+        for i, user in enumerate(users):
+            status_text.text(f"🔄 {user['name']}님 분석 및 메시지 생성 중... ({i+1}/10)")
             
-            # [모드 3] 주간 예보 반영
+            # A. 검색 쿼리 만들기 (고객 고민 + 모드별 전략)
+            # users.json의 'concerns' 리스트를 문자열로 변환
+            concerns_text = ", ".join(user.get('concerns', ['피부 고민']))
+            query = f"{user.get('skin_type', '모든')} 피부, 고민: {concerns_text}"
+            
+            # [모드 3] 선택 시 날씨 정보 추가 (RAG 검색 정확도 향상)
             if "모드 3" in mode: 
-                query += f", (참고: 현재 날씨 {current_weather}, 주간 예보: {weekly_forecast})"
-                
-            best_product = search_best_product(query)
-            if best_product:
-                context = f"고객: {user['name']}, 고민: {query}"
-                copy = generate_marketing_copy(best_product, context)
-                st.session_state['messages'][i] = {"product": best_product['name'], "copy": copy}
+                query += f", (상황: 현재 날씨 {current_weather}, 주간 예보: {weekly_forecast})"
+            elif "모드 1" in mode:
+                query += ", (포인트: 고객 맞춤형 혜택 강조)"
             
+            # B. 벡터 DB에서 최적의 상품 검색 (RAG)
+            best_product = search_best_product(query)
+            
+            if best_product:
+                # C. AI가 메시지 작성 (Generator)
+                # 프롬프트에 들어갈 문맥 정보 구성
+                context = f"""
+                - 고객명: {user['name']}
+                - 연령대: {user['age']}세
+                - 피부타입: {user.get('skin_type', '정보없음')}
+                - 핵심고민: {concerns_text}
+                - 검색된상황: {query}
+                """
+                copy = generate_marketing_copy(best_product, context)
+                
+                # 결과 저장 (화면 리프레시 돼도 유지되도록 session_state 사용)
+                st.session_state['messages'][i] = {
+                    "product": best_product['name'], # vector_db.py에서 반환하는 키 확인 필요 (보통 name)
+                    "copy": copy,
+                    "match_score": 90 + (i % 9) # 데모용 점수 (실제로는 거리 기반 계산 가능)
+                }
+            else:
+                st.session_state['messages'][i] = {"product": "추천 제품 없음", "copy": "적절한 제품을 찾지 못했습니다.", "match_score": 0}
+            
+            # 진행률 업데이트
             progress_bar.progress((i + 1) / 10)
             
+        # (3) 완료 처리
         st.session_state['gen_time'] = f"{round(time.time() - start_time, 2)}초"
         progress_bar.empty()
+        status_text.empty()
+        st.toast("메시지 생성이 완료되었습니다!", icon="✅")
     
+    # 생성 소요 시간 표시
     if 'gen_time' in st.session_state:
         st.caption(f"⏱️ 생성 완료! (소요 시간: {st.session_state['gen_time']})")
 
     st.write("---")
     
-    for i, user in enumerate(get_users()[:10]):
-        msg_data = st.session_state['messages'].get(i, {"product": "-", "copy": ""})
+    # 2. 생성된 메시지 리스트 출력 (Editable)
+    users = get_users()[:10]
+    for i, user in enumerate(users):
+        # 저장된 메시지가 없으면 기본값 표시
+        msg_data = st.session_state['messages'].get(i, {"product": "-", "copy": "", "match_score": 0})
         
+        # 고객 정보 & 매칭 점수 뱃지
         c1, c2 = st.columns([2, 1])
-        with c1: st.markdown(f"**{user['name']}** <span class='score-badge'>Match 9{9-i}%</span>", unsafe_allow_html=True)
-        with c2: st.caption(f"📦 {msg_data['product']}")
+        with c1: 
+            st.markdown(f"**{user['name']}** <span class='score-badge'>Match {msg_data.get('match_score', 0)}%</span>", unsafe_allow_html=True)
+        with c2: 
+            st.caption(f"📦 {msg_data['product']}")
         
-        st.text_area(f"{user['name']}님 메시지", value=msg_data['copy'], height=100, key=f"edit_{i}", label_visibility="collapsed")
-        st.write("")
+        # 메시지 수정 창 (마케터가 수정 가능)
+        # key를 unique하게 주어야 입력값이 유지됨
+        new_copy = st.text_area(
+            f"{user['name']}님 메시지", 
+            value=msg_data['copy'], 
+            height=100, 
+            key=f"edit_{i}", 
+            label_visibility="collapsed"
+        )
+        
+        # 수정된 내용이 있다면 세션에 즉시 반영 (선택 사항)
+        if new_copy != msg_data['copy']:
+            st.session_state['messages'][i]['copy'] = new_copy
+            
+        st.write("") # 간격
 
 # 🟦 [RIGHT] 실시간 검색
 with right_col:
