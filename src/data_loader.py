@@ -5,39 +5,42 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PATH = os.path.join(BASE_DIR, 'data', 'products.csv')
 
 def load_product_data():
-    print(f"📂 데이터 로딩 중... 경로: {DATA_PATH}")
-    
+    """CSV 파일을 읽어와서 검색용 텍스트와 메타데이터로 변환"""
     if not os.path.exists(DATA_PATH):
-        print(f"❌ 파일이 없습니다: {DATA_PATH}")
+        print(f"❌ [Data Loader] 파일 없음: {DATA_PATH}")
         return []
 
     try:
-        # 🔥 핵심 수정: 문제 있는 줄(쉼표 개수 안 맞는 줄)은 쿨하게 건너뛰기!
-        df = pd.read_csv(DATA_PATH, on_bad_lines='skip') 
-        print(f"✅ 총 {len(df)}개의 제품 데이터를 정상적으로 불러왔습니다.")
+        # utf-8-sig로 한글 깨짐 방지, 에러 라인 무시
+        df = pd.read_csv(DATA_PATH, encoding='utf-8-sig', on_bad_lines='skip')
         
         products = []
         for _, row in df.iterrows():
-            # 검색에 쓰일 텍스트
-            search_text = f"[{row['brand']}] {row['product_name']} \n특징: {row['features']} \n리뷰: {row['reviews']} \n추천타입: {row['skin_type']}"
+            # 데이터 결측치(NaN) 방지용 안전 처리
+            brand = str(row.get('brand', ''))
+            name = str(row.get('product_name', ''))
+            features = str(row.get('features', ''))
+            skin_type = str(row.get('skin_type', ''))
+            price = str(row.get('price', '0'))
+
+            # 검색용 텍스트 (AI가 이 내용을 보고 찾음)
+            search_text = f"[{brand}] {name} \n특징: {features} \n추천: {skin_type}"
             
             product_info = {
                 "search_text": search_text,
                 "metadata": {
-                    "brand": row['brand'],
-                    "name": row['product_name'],
-                    "price": row['price'],
-                    "skin_type": row['skin_type'],
-                    "description": row['features']
+                    "brand": brand,
+                    "name": name,
+                    "price": price,
+                    "skin_type": skin_type,
+                    "description": features
                 }
             }
             products.append(product_info)
             
+        print(f"✅ [Data Loader] {len(products)}개 데이터 로드 완료")
         return products
 
     except Exception as e:
-        print(f"❌ 에러 발생: {e}")
+        print(f"❌ [Data Loader] 로드 중 에러: {e}")
         return []
-
-if __name__ == "__main__":
-    load_product_data()

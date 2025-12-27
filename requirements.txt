@@ -1,24 +1,7 @@
-# --- 1. 핵심 AI SDK (Gemini, Groq, GPT) ---
-google-generativeai
-groq
-openai
-
-# --- 2. 데이터 처리 & 벡터 DB ---
-pandas
-numpy
-chromadb
-# ChromaDB 실행에 필요한 추가 의존성
-onnxruntime>=1.14.0 
-
-# --- 3. 웹 인터페이스 (Streamlit) ---
 streamlit
+pandas
+chromadb
+google-generativeai
 python-dotenv
-
-# --- 4. 크롤링 (데이터 수집용) ---
-beautifulsoup4
-selenium
-webdriver-manager
-
-# --- 5. 유틸리티 ---
-jupyter
-tiktoken
+sentence-transformers
+requests
